@@ -1,0 +1,32 @@
+# Build outputs
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.spec.bak
+
+# IDE
+.idea/
+.vscode/
+
+# User runtime data
+config.json
+homepage_blocks.json
+service_records.json
+call_list.json
+liangzhiyibai_data.json
+
+# Temp / exploration files
+_*.py
+_*.txt
+para_text_output.txt
+
+# User documents & screenshots
+*.png
+2026*.xlsx
+*.docx
+
+# OS
+Thumbs.db
+Desktop.ini
