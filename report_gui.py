@@ -904,8 +904,9 @@ class ReportApp:
                     text_w.unbind("<Configure>")
             def _grip_stop(event):
                 _drag_grip[0] = False
-                # 保存手动高度到 block
+                # 保存手动高度到 block 并持久化
                 block["_manual_height"] = int(text_w.cget("height"))
+                self._homepage_save()
             grip.bind("<ButtonPress-1>", _grip_press)
             grip.bind("<B1-Motion>", _grip_move)
             grip.bind("<ButtonRelease-1>", _grip_stop)
@@ -1159,21 +1160,21 @@ class ReportApp:
             menu.add_cascade(label="单元格格式", menu=fmt_menu)
             menu.post(event.x_root, event.y_root)
 
-        def _merge_cells(self):
-            if len(self.sel_cells) < 2: return
-            sc = sorted(self.sel_cells)
-            fr, fc = sc[0]
-            combined = self.rows[fr][fc] if fc < len(self.rows[fr]) else ""
-            for r, c in sc[1:]:
-                if c < len(self.rows[r]) and self.rows[r][c].strip():
-                    combined += str(self.rows[r][c])
-                while len(self.rows[r]) <= c: self.rows[r].append("")
-                self.rows[r][c] = ""
-            while len(self.rows[fr]) <= fc: self.rows[fr].append("")
-            self.rows[fr][fc] = combined
-            self._rebuild()
+        def _sync_entries(self):
+            """将 Entry 中的当前值写回 self.rows"""
+            if not self.edit_mode:
+                return
+            for ri in range(self.nrows):
+                for ci in range(self.ncols):
+                    for w in self.frame.grid_slaves(row=ri + 1, column=ci):
+                        if isinstance(w, tk.Entry):
+                            val = w.get().strip()
+                            while len(self.rows[ri]) <= ci:
+                                self.rows[ri].append("")
+                            self.rows[ri][ci] = val
 
         def get_data(self):
+            self._sync_entries()
             hdrs = []
             for ci in range(self.ncols):
                 txt = self.headers[ci] if ci < len(self.headers) else f"列{ci + 1}"
@@ -1199,9 +1200,11 @@ class ReportApp:
             self._apply_selection()
 
         def add_row_at_end(self):
+            self._sync_entries()
             self.rows.append([""] * self.ncols); self._rebuild()
 
         def insert_row_above(self):
+            self._sync_entries()
             if self.sel_cells:
                 r = min(rc[0] for rc in self.sel_cells)
                 self.rows.insert(r, [""] * self.ncols)
@@ -1210,6 +1213,7 @@ class ReportApp:
             self._rebuild()
 
         def delete_selected_rows(self):
+            self._sync_entries()
             rows_to_del = set(r for (r, c) in self.sel_cells)
             if not rows_to_del: return
             for r in sorted(rows_to_del, reverse=True):
@@ -1217,6 +1221,7 @@ class ReportApp:
             self.sel_cells.clear(); self._rebuild()
 
         def add_column_at_end(self):
+            self._sync_entries()
             self.headers.append(f"列{self.ncols + 1}")
             for row in self.rows:
                 while len(row) < len(self.headers): row.append("")
@@ -1224,9 +1229,32 @@ class ReportApp:
 
         def delete_last_column(self):
             if self.ncols <= 1: return
+            self._sync_entries()
             self.headers.pop()
             for row in self.rows:
                 if len(row) > len(self.headers): row.pop()
+            self._rebuild()
+
+        def _merge_cells(self):
+            if len(self.sel_cells) < 2: return
+            self._sync_entries()
+            sc = sorted(self.sel_cells)
+            fr, fc = sc[0]
+            # 确保 rows 有足够列
+            while len(self.rows[fr]) <= fc:
+                self.rows[fr].append("")
+            combined = self.rows[fr][fc]
+            for r, c in sc[1:]:
+                while len(self.rows) <= r:
+                    self.rows.append([""] * self.ncols)
+                while len(self.rows[r]) <= c:
+                    self.rows[r].append("")
+                if self.rows[r][c].strip():
+                    combined += str(self.rows[r][c])
+                self.rows[r][c] = ""
+            self.rows[fr][fc] = combined
+            self.sel_cells.clear()
+            self.sel_cells.add((fr, fc))
             self._rebuild()
 
     # ---- _homepage_render_table_block（重写为网格表格） ----
